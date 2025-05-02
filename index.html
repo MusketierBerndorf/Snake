@@ -258,7 +258,7 @@ function gameLoop() {
   if (head.x === food.x && head.y === food.y) {
     score++;
     eatenCount++;
-    if (eatenCount % 10 === 0 && speed > 50) {
+    if (eatenCount % 20 === 0 && speed > 50) {
       speed -= 20;
       clearInterval(gameInterval);
       gameInterval = setInterval(gameLoop, speed);
