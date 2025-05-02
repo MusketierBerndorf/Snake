@@ -110,6 +110,8 @@
       font-weight: 600;
     }
   </style>
+  <!-- Supabase JS -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 <div class="game-container">
@@ -165,10 +167,10 @@
 <script>
 "use strict";
 
-/* ====== SimpleBoards Leaderboard Konfiguration ====== */
-const SIMPLEBOARDS_API_KEY = "3ad7d602-3c0b-4c27-af3a-59d6622b98e8";
-const SIMPLEBOARDS_LEADERBOARD_ID = "03070a96-b687-4e29-769008dd89b01af7";
-const SIMPLEBOARDS_API_URL = "https://api.simpleboards.dev/api/entries";
+/* ====== Supabase Highscore-Konfiguration ====== */
+const SUPABASE_URL = "https://ddnefshhdwrdwrryxbet.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRkbmVmc2hoZHdyZHdycnl4YmV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYyMTc1ODksImV4cCI6MjA2MTc5MzU4OX0.VBu2i5iT7f2EoOQ-HMC5Uv-bTBsgQfLhu2kINmV-J_A";
+const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 /* ====== Canvas & Spiellogik ====== */
 const canvasWidth = 320;
@@ -258,7 +260,7 @@ function gameLoop() {
   if (head.x === food.x && head.y === food.y) {
     score++;
     eatenCount++;
-    if (eatenCount % 20 === 0 && speed > 50) {
+    if (eatenCount % 15 === 0 && speed > 50) {
       speed -= 20;
       clearInterval(gameInterval);
       gameInterval = setInterval(gameLoop, speed);
@@ -320,69 +322,36 @@ function triggerGameOver() {
   gameOverOverlay.classList.remove('hidden');
 }
 
-/* ====== Highscore-Funktionen über SimpleBoards ====== */
-
-// Highscore speichern (POST)
-function saveHighscore(name, score) {
-  fetch(SIMPLEBOARDS_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': SIMPLEBOARDS_API_KEY
-    },
-    body: JSON.stringify({
-      leaderboardId: SIMPLEBOARDS_LEADERBOARD_ID,
-      playerDisplayName: name,
-      score: score.toString()
-    })
-  })
-  .then(response => {
-    if (!response.ok) {
-      throw new Error('Fehler beim Speichern des Highscores.');
-    }
-    // Optional: Rückmeldung oder weitere Aktionen
-  })
-  .catch(error => {
+/* ====== Highscore-Funktionen über Supabase ====== */
+async function saveHighscore(name, score) {
+  const { error } = await supabase
+    .from('highscores')
+    .insert([{ name: name, score: score }]);
+  if (error) {
     alert('Highscore konnte nicht gespeichert werden. Bitte später erneut versuchen.');
     console.error(error);
-  });
+  }
 }
 
-// Highscores anzeigen (GET)
-function showHighscoreOverlay() {
+async function showHighscoreOverlay() {
   finalOverlay.classList.add('hidden');
   gameOverOverlay.classList.add('hidden');
-  fetch(`${SIMPLEBOARDS_API_URL}?leaderboardId=${SIMPLEBOARDS_LEADERBOARD_ID}`, {
-    headers: {
-      'x-api-key': SIMPLEBOARDS_API_KEY
-    }
-  })
-    .then(response => {
-      if (!response.ok) {
-        throw new Error('Fehler beim Laden der Highscores.');
-      }
-      return response.json();
-    })
-    .then(data => {
-      let html = "<h2>Highscore</h2><table><tr><th>Platz</th><th>Name</th><th>Score</th></tr>";
-      if (data.entries && data.entries.length > 0) {
-        data.entries
-          .sort((a, b) => parseInt(b.score) - parseInt(a.score))
-          .forEach((entry, i) => {
-            html += `<tr><td>${i + 1}</td><td>${entry.playerDisplayName}</td><td>${entry.score}</td></tr>`;
-          });
-      } else {
-        html += `<tr><td colspan="3">Noch keine Einträge</td></tr>`;
-      }
-      html += "</table>";
-      highscoreTableContainer.innerHTML = html;
-      highscoreOverlay.classList.remove('hidden');
-    })
-    .catch(error => {
-      highscoreTableContainer.innerHTML = "<p>Highscore konnte nicht geladen werden.</p>";
-      highscoreOverlay.classList.remove('hidden');
-      console.error(error);
+  const { data, error } = await supabase
+    .from('highscores')
+    .select('*')
+    .order('score', { ascending: false })
+    .limit(10);
+  let html = "<h2>Highscore</h2><table><tr><th>Platz</th><th>Name</th><th>Score</th></tr>";
+  if (data && data.length > 0) {
+    data.forEach((entry, i) => {
+      html += `<tr><td>${i + 1}</td><td>${entry.name}</td><td>${entry.score}</td></tr>`;
     });
+  } else {
+    html += `<tr><td colspan="3">Noch keine Einträge</td></tr>`;
+  }
+  html += "</table>";
+  highscoreTableContainer.innerHTML = html;
+  highscoreOverlay.classList.remove('hidden');
 }
 
 function showFinalOverlay() {
@@ -425,7 +394,13 @@ function startCountdown() {
 
 /* Events */
 
-// Start (Button bleibt, wird aber nicht mehr benötigt)
+// Automatischer Start nach Countdown (auch auf Handy)
+window.addEventListener('DOMContentLoaded', () => {
+  startOverlay.classList.add('hidden');
+  startCountdown();
+});
+
+// Start-Button (optional, falls jemand manuell starten will)
 btnStart.addEventListener('click', () => {
   startOverlay.classList.add('hidden');
   startCountdown();
@@ -510,12 +485,6 @@ btnHighscoreOk.addEventListener('click', () => {
 // Exit
 btnExitOk.addEventListener('click', () => {
   exitOverlay.classList.add('hidden');
-});
-
-/* === Automatischer Start nach Countdown === */
-window.addEventListener('DOMContentLoaded', () => {
-  startOverlay.classList.add('hidden');
-  startCountdown();
 });
 </script>
 </body>
