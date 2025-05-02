@@ -1,0 +1,498 @@
+#<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Musketier Snake</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+      background: #6ADB6A;
+      overflow: hidden;
+    }
+    .game-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      max-width: 400px;
+      margin: 0 auto;
+    }
+    #gameCanvas {
+      background: #66bb66;
+      border: 2px solid #333;
+      display: block;
+      margin-top: 20px;
+      width: 100%;
+      max-width: 320px;
+      height: 390px;
+      touch-action: none;
+    }
+    .arrow-container {
+      position: relative;
+      width: 100%;
+      max-width: 200px;
+      height: 200px;
+      margin: 15px auto;
+    }
+    .arrow-button {
+      position: absolute;
+      border-radius: 10px;
+      border: none;
+      background: #fff;
+      color: #333;
+      cursor: pointer;
+      width: 50px;
+      height: 50px;
+      font-size: 1.1rem;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+    #btnUp {
+      top: 10px;
+      left: 75px;
+      font-size: 1rem;
+    }
+    #btnDown {
+      bottom: 25px;
+      left: 75px;
+      font-size: 1.1rem;
+    }
+    #btnLeft {
+      top: 55px;
+      left: 15px;
+      font-size: 1.1rem;
+    }
+    #btnRight {
+      top: 55px;
+      right: 0;
+      font-size: 1.2rem;
+    }
+    .overlay {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
+    .overlay.hidden {
+      display: none;
+    }
+    button {
+      margin: 10px;
+      padding: 10px 20px;
+      font-size: 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      background: #fff;
+      color: #333;
+      border: none;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+    .highscore-table {
+      background: #fff;
+      color: #333;
+      padding: 20px;
+      border-radius: 10px;
+      max-height: 50vh;
+      overflow-y: auto;
+      text-align: center;
+    }
+    .highscore-table table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .highscore-table th, .highscore-table td {
+      padding: 8px;
+      border-bottom: 1px solid #ccc;
+    }
+    .party-msg {
+      font-size: 1.2rem;
+      color: #ff0;
+    }
+    #gameOverMessage {
+      font-family: 'Open Sans', Arial, sans-serif; 
+      font-size: 1.6rem;
+      color: #ff66cc;
+      text-align: center;
+      margin-bottom: 20px;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+<div class="game-container">
+  <canvas id="gameCanvas"></canvas>
+  <div class="arrow-container">
+    <button id="btnUp" class="arrow-button">▲</button>
+    <button id="btnLeft" class="arrow-button">◀</button>
+    <button id="btnRight" class="arrow-button">▶</button>
+    <button id="btnDown" class="arrow-button">▼</button>
+  </div>
+</div>
+
+<!-- Start Overlay -->
+<div class="overlay" id="startOverlay">
+  <h1>Musketier Snake</h1>
+  <button id="btnStart">Spiel starten</button>
+</div>
+
+<!-- Countdown Overlay -->
+<div class="overlay hidden" id="countdownOverlay">
+  <h1 id="countdownText" style="font-size:3rem;">3</h1>
+</div>
+
+<!-- Game Over Overlay -->
+<div class="overlay hidden" id="gameOverOverlay">
+  <div id="gameOverMessage"></div>
+  <p style="margin-bottom:10px;">Möchtest du deine erreichten Happen in die Highscore-Tabelle eintragen?</p>
+  <div style="margin-bottom:10px;">
+    <button id="btnNoSave">Nein</button>
+  </div>
+  <div id="nameInputContainer" style="margin:10px 0;">
+    <input type="text" id="playerName" placeholder="Dein Name" style="padding:10px; font-size:1rem;">
+    <button id="btnNameSave">Eintragen</button>
+  </div>
+</div>
+
+<!-- Final Overlay -->
+<div class="overlay hidden" id="finalOverlay">
+  <div id="finalMessage" style="text-align:center; margin-bottom:20px;"></div>
+  <div>
+    <button id="btnFinalOkay">Okay</button>
+    <button id="btnFinalRetry">Neuer Versuch</button>
+    <button id="btnFinalHighscore">Highscore ansehen</button>
+  </div>
+</div>
+
+<!-- Highscore Overlay -->
+<div class="overlay hidden" id="highscoreOverlay">
+  <div class="highscore-table" id="highscoreTableContainer"></div>
+  <button id="btnHighscoreOk" style="margin-top:20px;">Okay</button>
+</div>
+
+<!-- Exit Overlay -->
+<div class="overlay hidden" id="exitOverlay">
+  <div id="exitMessage" class="party-msg" style="text-align:center; font-size:1.3rem;"></div>
+  <button id="btnExitOk" style="margin-top:15px;">Okay</button>
+</div>
+
+<script>
+"use strict";
+
+/* ====== Canvas & Spiellogik ====== */
+const canvasWidth = 320;
+const canvasHeight = 420;
+const gridSize = 20;
+const cols = canvasWidth / gridSize;
+const rows = canvasHeight / gridSize;
+
+const canvas = document.getElementById('gameCanvas');
+canvas.width = canvasWidth;
+canvas.height = canvasHeight;
+const ctx = canvas.getContext('2d');
+
+let snake = [];
+let direction = { x: 1, y: 0 };
+let nextDirection = { x: 1, y: 0 };
+let food = {};
+let foodEmojis = ["🏹", "💣", "🔫", "🍺"];
+let currentFoodIndex = 0;
+let score = 0;
+let speed = 200; 
+let eatenCount = 0;
+let gameInterval = null;
+let isGameOver = false;
+
+/* Overlays */
+const startOverlay = document.getElementById('startOverlay');
+const btnStart = document.getElementById('btnStart');
+const countdownOverlay = document.getElementById('countdownOverlay');
+const countdownText = document.getElementById('countdownText');
+const gameOverOverlay = document.getElementById('gameOverOverlay');
+const gameOverMessage = document.getElementById('gameOverMessage');
+const btnNoSave = document.getElementById('btnNoSave');
+const nameInputContainer = document.getElementById('nameInputContainer');
+const playerNameInput = document.getElementById('playerName');
+const btnNameSave = document.getElementById('btnNameSave');
+const finalOverlay = document.getElementById('finalOverlay');
+const finalMessage = document.getElementById('finalMessage');
+const btnFinalOkay = document.getElementById('btnFinalOkay');
+const btnFinalRetry = document.getElementById('btnFinalRetry');
+const btnFinalHighscore = document.getElementById('btnFinalHighscore');
+const highscoreOverlay = document.getElementById('highscoreOverlay');
+const highscoreTableContainer = document.getElementById('highscoreTableContainer');
+const btnHighscoreOk = document.getElementById('btnHighscoreOk');
+const exitOverlay = document.getElementById('exitOverlay');
+const exitMessage = document.getElementById('exitMessage');
+const btnExitOk = document.getElementById('btnExitOk');
+
+/* Pfeiltasten */
+const btnUp = document.getElementById('btnUp');
+const btnDown = document.getElementById('btnDown');
+const btnLeft = document.getElementById('btnLeft');
+const btnRight = document.getElementById('btnRight');
+
+function drawGameField() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.font = gridSize + "px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(food.type, food.x * gridSize + gridSize / 2, food.y * gridSize + gridSize / 2);
+  for (let i = 0; i < snake.length; i++) {
+    let seg = snake[i];
+    if (i === 0) ctx.fillStyle = "#000";
+    else if (i === snake.length - 1) ctx.fillStyle = "#000";
+    else ctx.fillStyle = "purple";
+    ctx.fillRect(seg.x * gridSize, seg.y * gridSize, gridSize, gridSize);
+  }
+  ctx.fillStyle = "#000";
+  ctx.font = "12px Arial";
+  ctx.textAlign = "left";
+  ctx.fillText("Score: " + score, 5, 15);
+}
+
+function gameLoop() {
+  direction = nextDirection;
+  let head = { x: snake[0].x + direction.x, y: snake[0].y + direction.y };
+  if (head.x < 0) head.x = cols - 1;
+  else if (head.x >= cols) head.x = 0;
+  if (head.y < 0) head.y = rows - 1;
+  else if (head.y >= rows) head.y = 0;
+  for (let seg of snake) {
+    if (seg.x === head.x && seg.y === head.y) {
+      return triggerGameOver();
+    }
+  }
+  snake.unshift(head);
+  if (head.x === food.x && head.y === food.y) {
+    score++;
+    eatenCount++;
+    if (eatenCount % 10 === 0 && speed > 50) {
+      speed -= 20;
+      clearInterval(gameInterval);
+      gameInterval = setInterval(gameLoop, speed);
+    }
+    spawnFood();
+  } else {
+    snake.pop();
+  }
+  drawGameField();
+}
+
+function initGame() {
+  snake = [];
+  let cx = Math.floor(cols / 2);
+  let cy = Math.floor(rows / 2);
+  snake.push({ x: cx, y: cy });
+  snake.push({ x: cx - 1, y: cy });
+  snake.push({ x: cx - 2, y: cy });
+  direction = { x: 1, y: 0 };
+  nextDirection = { x: 1, y: 0 };
+  score = 0;
+  eatenCount = 0;
+  speed = 200;
+  isGameOver = false;
+  spawnFood();
+  drawGameField();
+}
+
+function startGame() {
+  initGame();
+  clearInterval(gameInterval);
+  gameInterval = setInterval(gameLoop, speed);
+}
+
+function spawnFood() {
+  let valid = false;
+  let fx, fy;
+  while (!valid) {
+    fx = Math.floor(Math.random() * cols);
+    fy = Math.floor(Math.random() * rows);
+    valid = true;
+    for (let seg of snake) {
+      if (seg.x === fx && seg.y === fy) {
+        valid = false;
+        break;
+      }
+    }
+  }
+  food = { x: fx, y: fy, type: foodEmojis[currentFoodIndex] };
+  currentFoodIndex = (currentFoodIndex + 1) % foodEmojis.length;
+}
+
+function triggerGameOver() {
+  clearInterval(gameInterval);
+  isGameOver = true;
+  let msg = "Du warst ein tapferer Musketier und hast " + score + " Happen genascht";
+  if (score === 15) msg = "Du warst ein tapferer Musketier und hast 15 Happen genascht";
+  gameOverMessage.textContent = msg;
+  gameOverOverlay.classList.remove('hidden');
+}
+
+function saveHighscore(name, score) {
+  let hs = JSON.parse(localStorage.getItem("musketierSnakeHighscores")) || [];
+  hs.push({ name, score });
+  hs.sort((a, b) => b.score - a.score);
+  hs = hs.slice(0, 25);
+  localStorage.setItem("musketierSnakeHighscores", JSON.stringify(hs));
+}
+
+function showFinalOverlay() {
+  finalMessage.textContent = "Jetzt hast Du dir ein Getränk im Musketierlager verdient";
+  finalOverlay.classList.remove('hidden');
+}
+
+function showHighscoreOverlay() {
+  finalOverlay.classList.add('hidden');
+  gameOverOverlay.classList.add('hidden');
+  let hs = JSON.parse(localStorage.getItem("musketierSnakeHighscores")) || [];
+  let html = "<h2>Highscore</h2><table><tr><th>Platz</th><th>Name</th><th>Score</th></tr>";
+  hs.forEach((h, i) => {
+    html += "<tr><td>" + (i + 1) + "</td><td>" + h.name + "</td><td>" + h.score + "</td></tr>";
+  });
+  html += "</table>";
+  highscoreTableContainer.innerHTML = html;
+  highscoreOverlay.classList.remove('hidden');
+}
+
+function showExitOverlay() {
+  exitMessage.innerHTML = "🍺🎊🥳 Guten Durst und viel Spaß beim Feiern 🍺🎊🥳";
+  exitOverlay.classList.remove('hidden');
+}
+
+function resetGame() {
+  finalOverlay.classList.add('hidden');
+  gameOverOverlay.classList.add('hidden');
+  exitOverlay.classList.add('hidden');
+  highscoreOverlay.classList.add('hidden');
+  startCountdown();
+}
+
+function startCountdown() {
+  let c = 3;
+  countdownOverlay.classList.remove('hidden');
+  countdownText.textContent = c;
+  function step() {
+    if (c > 1) {
+      c--;
+      countdownText.textContent = c;
+      setTimeout(step, 1000);
+    } else {
+      countdownText.textContent = "Start!";
+      setTimeout(() => {
+        countdownOverlay.classList.add('hidden');
+        startGame();
+      }, 1000);
+    }
+  }
+  setTimeout(step, 1000);
+}
+
+/* Events */
+
+// Start (Button bleibt, wird aber nicht mehr benötigt)
+btnStart.addEventListener('click', () => {
+  startOverlay.classList.add('hidden');
+  startCountdown();
+});
+btnStart.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  startOverlay.classList.add('hidden');
+  startCountdown();
+}, { passive: false });
+
+// Tastatur
+document.addEventListener('keydown', e => {
+  switch (e.key) {
+    case "ArrowUp":
+      if (direction.y !== 1) nextDirection = { x: 0, y: -1 };
+      break;
+    case "ArrowDown":
+      if (direction.y !== -1) nextDirection = { x: 0, y: 1 };
+      break;
+    case "ArrowLeft":
+      if (direction.x !== 1) nextDirection = { x: -1, y: 0 };
+      break;
+    case "ArrowRight":
+      if (direction.x !== -1) nextDirection = { x: 1, y: 0 };
+      break;
+  }
+});
+
+/* Pfeiltasten-Klicks und Touch-Events */
+function upFunc() { if (direction.y !== 1) nextDirection = { x: 0, y: -1 }; }
+function downFunc() { if (direction.y !== -1) nextDirection = { x: 0, y: 1 }; }
+function leftFunc() { if (direction.x !== 1) nextDirection = { x: -1, y: 0 }; }
+function rightFunc() { if (direction.x !== -1) nextDirection = { x: 1, y: 0 }; }
+
+btnUp.addEventListener('click', upFunc);
+btnDown.addEventListener('click', downFunc);
+btnLeft.addEventListener('click', leftFunc);
+btnRight.addEventListener('click', rightFunc);
+
+btnUp.addEventListener('touchstart', (e) => { e.preventDefault(); upFunc(); }, { passive: false });
+btnDown.addEventListener('touchstart', (e) => { e.preventDefault(); downFunc(); }, { passive: false });
+btnLeft.addEventListener('touchstart', (e) => { e.preventDefault(); leftFunc(); }, { passive: false });
+btnRight.addEventListener('touchstart', (e) => { e.preventDefault(); rightFunc(); }, { passive: false });
+
+document.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+}, { passive: false });
+
+// Game Over
+btnNoSave.addEventListener('click', () => {
+  gameOverOverlay.classList.add('hidden');
+  showFinalOverlay();
+});
+btnNameSave.addEventListener('click', () => {
+  let name = playerNameInput.value.trim();
+  if (name !== "") {
+    saveHighscore(name, score);
+  }
+  gameOverOverlay.classList.add('hidden');
+  showFinalOverlay();
+});
+
+// Final Overlay
+btnFinalOkay.addEventListener('click', () => {
+  finalOverlay.classList.add('hidden');
+  showExitOverlay();
+});
+btnFinalRetry.addEventListener('click', () => {
+  finalOverlay.classList.add('hidden');
+  resetGame();
+});
+btnFinalHighscore.addEventListener('click', () => {
+  showHighscoreOverlay();
+});
+
+// Highscore Overlay
+btnHighscoreOk.addEventListener('click', () => {
+  highscoreOverlay.classList.add('hidden');
+  showExitOverlay();
+});
+
+// Exit
+btnExitOk.addEventListener('click', () => {
+  exitOverlay.classList.add('hidden');
+});
+
+/* === Automatischer Start nach Countdown === */
+window.addEventListener('DOMContentLoaded', () => {
+  startOverlay.classList.add('hidden');
+  startCountdown();
+});
+</script>
+</body>
+</html>
