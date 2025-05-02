@@ -1,4 +1,4 @@
-#<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="de">
 <head>
   <meta charset="UTF-8">
@@ -51,26 +51,10 @@
       -webkit-tap-highlight-color: transparent;
       touch-action: manipulation;
     }
-    #btnUp {
-      top: 10px;
-      left: 75px;
-      font-size: 1rem;
-    }
-    #btnDown {
-      bottom: 25px;
-      left: 75px;
-      font-size: 1.1rem;
-    }
-    #btnLeft {
-      top: 55px;
-      left: 15px;
-      font-size: 1.1rem;
-    }
-    #btnRight {
-      top: 55px;
-      right: 0;
-      font-size: 1.2rem;
-    }
+    #btnUp { top: 10px; left: 75px; font-size: 1rem; }
+    #btnDown { bottom: 25px; left: 75px; font-size: 1.1rem; }
+    #btnLeft { top: 55px; left: 15px; font-size: 1.1rem; }
+    #btnRight { top: 55px; right: 0; font-size: 1.2rem; }
     .overlay {
       position: fixed;
       top: 0; left: 0;
@@ -83,9 +67,7 @@
       align-items: center;
       z-index: 9999;
     }
-    .overlay.hidden {
-      display: none;
-    }
+    .overlay.hidden { display: none; }
     button {
       margin: 10px;
       padding: 10px 20px;
@@ -130,7 +112,6 @@
   </style>
 </head>
 <body>
-
 <div class="game-container">
   <canvas id="gameCanvas"></canvas>
   <div class="arrow-container">
@@ -141,18 +122,15 @@
   </div>
 </div>
 
-<!-- Start Overlay -->
 <div class="overlay" id="startOverlay">
   <h1>Musketier Snake</h1>
   <button id="btnStart">Spiel starten</button>
 </div>
 
-<!-- Countdown Overlay -->
 <div class="overlay hidden" id="countdownOverlay">
   <h1 id="countdownText" style="font-size:3rem;">3</h1>
 </div>
 
-<!-- Game Over Overlay -->
 <div class="overlay hidden" id="gameOverOverlay">
   <div id="gameOverMessage"></div>
   <p style="margin-bottom:10px;">Möchtest du deine erreichten Happen in die Highscore-Tabelle eintragen?</p>
@@ -165,7 +143,6 @@
   </div>
 </div>
 
-<!-- Final Overlay -->
 <div class="overlay hidden" id="finalOverlay">
   <div id="finalMessage" style="text-align:center; margin-bottom:20px;"></div>
   <div>
@@ -175,13 +152,11 @@
   </div>
 </div>
 
-<!-- Highscore Overlay -->
 <div class="overlay hidden" id="highscoreOverlay">
   <div class="highscore-table" id="highscoreTableContainer"></div>
   <button id="btnHighscoreOk" style="margin-top:20px;">Okay</button>
 </div>
 
-<!-- Exit Overlay -->
 <div class="overlay hidden" id="exitOverlay">
   <div id="exitMessage" class="party-msg" style="text-align:center; font-size:1.3rem;"></div>
   <button id="btnExitOk" style="margin-top:15px;">Okay</button>
@@ -189,6 +164,11 @@
 
 <script>
 "use strict";
+
+/* ====== SimpleBoards Leaderboard Konfiguration ====== */
+const SIMPLEBOARDS_API_KEY = "3ad7d602-3c0b-4c27-af3a-59d6622b98e8";
+const SIMPLEBOARDS_LEADERBOARD_ID = "03070a96-b687-4e29-769008dd89b01af7";
+const SIMPLEBOARDS_API_URL = "https://api.simpleboards.dev/api/entries";
 
 /* ====== Canvas & Spiellogik ====== */
 const canvasWidth = 320;
@@ -340,30 +320,74 @@ function triggerGameOver() {
   gameOverOverlay.classList.remove('hidden');
 }
 
+/* ====== Highscore-Funktionen über SimpleBoards ====== */
+
+// Highscore speichern (POST)
 function saveHighscore(name, score) {
-  let hs = JSON.parse(localStorage.getItem("musketierSnakeHighscores")) || [];
-  hs.push({ name, score });
-  hs.sort((a, b) => b.score - a.score);
-  hs = hs.slice(0, 25);
-  localStorage.setItem("musketierSnakeHighscores", JSON.stringify(hs));
+  fetch(SIMPLEBOARDS_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': SIMPLEBOARDS_API_KEY
+    },
+    body: JSON.stringify({
+      leaderboardId: SIMPLEBOARDS_LEADERBOARD_ID,
+      playerDisplayName: name,
+      score: score.toString()
+    })
+  })
+  .then(response => {
+    if (!response.ok) {
+      throw new Error('Fehler beim Speichern des Highscores.');
+    }
+    // Optional: Rückmeldung oder weitere Aktionen
+  })
+  .catch(error => {
+    alert('Highscore konnte nicht gespeichert werden. Bitte später erneut versuchen.');
+    console.error(error);
+  });
+}
+
+// Highscores anzeigen (GET)
+function showHighscoreOverlay() {
+  finalOverlay.classList.add('hidden');
+  gameOverOverlay.classList.add('hidden');
+  fetch(`${SIMPLEBOARDS_API_URL}?leaderboardId=${SIMPLEBOARDS_LEADERBOARD_ID}`, {
+    headers: {
+      'x-api-key': SIMPLEBOARDS_API_KEY
+    }
+  })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('Fehler beim Laden der Highscores.');
+      }
+      return response.json();
+    })
+    .then(data => {
+      let html = "<h2>Highscore</h2><table><tr><th>Platz</th><th>Name</th><th>Score</th></tr>";
+      if (data.entries && data.entries.length > 0) {
+        data.entries
+          .sort((a, b) => parseInt(b.score) - parseInt(a.score))
+          .forEach((entry, i) => {
+            html += `<tr><td>${i + 1}</td><td>${entry.playerDisplayName}</td><td>${entry.score}</td></tr>`;
+          });
+      } else {
+        html += `<tr><td colspan="3">Noch keine Einträge</td></tr>`;
+      }
+      html += "</table>";
+      highscoreTableContainer.innerHTML = html;
+      highscoreOverlay.classList.remove('hidden');
+    })
+    .catch(error => {
+      highscoreTableContainer.innerHTML = "<p>Highscore konnte nicht geladen werden.</p>";
+      highscoreOverlay.classList.remove('hidden');
+      console.error(error);
+    });
 }
 
 function showFinalOverlay() {
   finalMessage.textContent = "Jetzt hast Du dir ein Getränk im Musketierlager verdient";
   finalOverlay.classList.remove('hidden');
-}
-
-function showHighscoreOverlay() {
-  finalOverlay.classList.add('hidden');
-  gameOverOverlay.classList.add('hidden');
-  let hs = JSON.parse(localStorage.getItem("musketierSnakeHighscores")) || [];
-  let html = "<h2>Highscore</h2><table><tr><th>Platz</th><th>Name</th><th>Score</th></tr>";
-  hs.forEach((h, i) => {
-    html += "<tr><td>" + (i + 1) + "</td><td>" + h.name + "</td><td>" + h.score + "</td></tr>";
-  });
-  html += "</table>";
-  highscoreTableContainer.innerHTML = html;
-  highscoreOverlay.classList.remove('hidden');
 }
 
 function showExitOverlay() {
@@ -446,7 +470,7 @@ btnDown.addEventListener('touchstart', (e) => { e.preventDefault(); downFunc(); 
 btnLeft.addEventListener('touchstart', (e) => { e.preventDefault(); leftFunc(); }, { passive: false });
 btnRight.addEventListener('touchstart', (e) => { e.preventDefault(); rightFunc(); }, { passive: false });
 
-document.addEventListener('touchmove', (e) => {
+canvas.addEventListener('touchmove', (e) => {
   e.preventDefault();
 }, { passive: false });
 
